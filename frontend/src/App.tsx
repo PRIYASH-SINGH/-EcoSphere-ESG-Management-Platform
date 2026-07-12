@@ -57,10 +57,10 @@ function DashboardPlaceholder() {
 function EnvironmentalPlaceholder() {
   const triggerBackendFetch = async () => {
     try {
-      const response = await fetch('/api/environmental');
+      const response = await fetch('/api/health');
       const data = await response.json();
-      alert("Connected to backend successfully! Check browser console for dataset.");
-      console.log("Data from backend in-memory store:", data);
+      alert("Connected to backend successfully! Health status: " + data.data.status);
+      console.log("Data from backend health check:", data);
     } catch (err) {
       console.error("Error communicating with backend:", err);
     }

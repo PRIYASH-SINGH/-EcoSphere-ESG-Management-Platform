@@ -1,14 +1,15 @@
-import { policyAcknowledgements, audits, complianceIssues } from "../store/index.js";
-import type {
-  PolicyAcknowledgement,
-  Audit,
-  ComplianceIssue,
-  AuditStatus,
-  Severity,
-  ComplianceStatus,
-} from "../types/index.js";
+import prisma from "../database/prisma.js";
+import type { PolicyAcknowledgement, Audit, ComplianceIssue } from "@prisma/client";
 
-// ── Input types ───────────────────────────────
+// ── Helper ─────────────────────────────────────
+
+function throwError(message: string, statusCode: number): never {
+  const error: any = new Error(message);
+  error.statusCode = statusCode;
+  throw error;
+}
+
+// ── Input types ────────────────────────────────
 
 interface CreateAuditInput {
   title: string;
@@ -24,180 +25,127 @@ interface UpdateAuditInput {
   auditor?: string;
   auditDate?: string | Date;
   findings?: string | null;
-  status?: AuditStatus;
+  status?: string;
 }
 
 interface CreateComplianceIssueInput {
   auditId?: number | null;
-  severity: Severity;
+  severity: string;
   description: string;
   owner: string;
   dueDate: string | Date;
 }
 
 interface ComplianceIssueFilters {
-  severity?: Severity;
-  status?: ComplianceStatus;
+  severity?: string;
+  status?: string;
 }
 
-// ── Service ───────────────────────────────────
+// ── Service ────────────────────────────────────
 
 export class GovernanceService {
   // ── Policy Acknowledgements ─────────────────
 
-  /**
-   * Acknowledge a policy for a user. 409 if already acknowledged.
-   */
-  acknowledgePolicy(userId: number, policyName: string): PolicyAcknowledgement {
-    const existing = policyAcknowledgements.findOne(
-      (ack) => ack.userId === userId && ack.policyName === policyName
-    );
-
+  async acknowledgePolicy(userId: number, policyName: string): Promise<PolicyAcknowledgement> {
+    const existing = await prisma.policyAcknowledgement.findUnique({
+      where: { userId_policyName: { userId, policyName } },
+    });
     if (existing) {
-      const error: any = new Error(
-        `You have already acknowledged the policy "${policyName}"`
-      );
-      error.statusCode = 409;
-      throw error;
+      throwError(`You have already acknowledged the policy "${policyName}"`, 409);
     }
 
-    const acknowledgement = policyAcknowledgements.create({
-      userId,
-      policyName,
-      acknowledgedAt: new Date(),
+    return prisma.policyAcknowledgement.create({
+      data: { userId, policyName },
     });
-
-    return acknowledgement;
   }
 
-  /**
-   * Return every policy acknowledgement (admin view).
-   */
-  getAllAcknowledgements(): PolicyAcknowledgement[] {
-    return policyAcknowledgements.findAll();
+  async getAllAcknowledgements(): Promise<PolicyAcknowledgement[]> {
+    return prisma.policyAcknowledgement.findMany({ orderBy: { acknowledgedAt: "desc" } });
   }
 
-  /**
-   * Return acknowledgements for a specific user.
-   */
-  getUserPolicies(userId: number): PolicyAcknowledgement[] {
-    return policyAcknowledgements.findMany((ack) => ack.userId === userId);
+  async getUserPolicies(userId: number): Promise<PolicyAcknowledgement[]> {
+    return prisma.policyAcknowledgement.findMany({
+      where: { userId },
+      orderBy: { acknowledgedAt: "desc" },
+    });
   }
 
   // ── Audits ──────────────────────────────────
 
-  /**
-   * Schedule a new audit.
-   */
-  createAudit(data: CreateAuditInput): Audit {
-    const audit = audits.create({
-      title: data.title,
-      departmentId: data.departmentId,
-      auditor: data.auditor,
-      auditDate: new Date(data.auditDate),
-      findings: data.findings ?? null,
-      status: "scheduled" as const,
-      createdAt: new Date(),
+  async createAudit(data: CreateAuditInput): Promise<Audit> {
+    return prisma.audit.create({
+      data: {
+        title: data.title,
+        departmentId: data.departmentId,
+        auditor: data.auditor,
+        auditDate: new Date(data.auditDate),
+        findings: data.findings ?? null,
+        status: "scheduled",
+      },
     });
-
-    return audit;
   }
 
-  /**
-   * Return all audits.
-   */
-  getAudits(): Audit[] {
-    return audits.findAll();
+  async getAudits(): Promise<Audit[]> {
+    return prisma.audit.findMany({ orderBy: { auditDate: "desc" } });
   }
 
-  /**
-   * Update an existing audit. 404 if not found.
-   */
-  updateAudit(id: number, data: UpdateAuditInput): Audit {
-    const existing = audits.findById(id);
-    if (!existing) {
-      const error: any = new Error(`Audit with id ${id} not found`);
-      error.statusCode = 404;
-      throw error;
-    }
+  async updateAudit(id: number, data: UpdateAuditInput): Promise<Audit> {
+    const existing = await prisma.audit.findUnique({ where: { id } });
+    if (!existing) throwError(`Audit with id ${id} not found`, 404);
 
-    const updatePayload: Partial<Audit> = {};
-
-    if (data.title !== undefined) updatePayload.title = data.title;
-    if (data.departmentId !== undefined) updatePayload.departmentId = data.departmentId;
-    if (data.auditor !== undefined) updatePayload.auditor = data.auditor;
-    if (data.auditDate !== undefined) updatePayload.auditDate = new Date(data.auditDate);
-    if (data.findings !== undefined) updatePayload.findings = data.findings ?? null;
-    if (data.status !== undefined) updatePayload.status = data.status;
-
-    const updated = audits.update(id, updatePayload)!;
-    return updated;
+    return prisma.audit.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
+        ...(data.auditor !== undefined && { auditor: data.auditor }),
+        ...(data.auditDate !== undefined && { auditDate: new Date(data.auditDate) }),
+        ...(data.findings !== undefined && { findings: data.findings ?? null }),
+        ...(data.status !== undefined && { status: data.status as any }),
+      },
+    });
   }
 
   // ── Compliance Issues ───────────────────────
 
-  /**
-   * Create a new compliance issue.
-   */
-  createComplianceIssue(data: CreateComplianceIssueInput): ComplianceIssue {
-    const issue = complianceIssues.create({
-      auditId: data.auditId ?? null,
-      severity: data.severity,
-      description: data.description,
-      owner: data.owner,
-      dueDate: new Date(data.dueDate),
-      status: "open" as const,
-      createdAt: new Date(),
-    });
-
-    return issue;
-  }
-
-  /**
-   * Return compliance issues, optionally filtered by severity and/or status.
-   */
-  getComplianceIssues(filters?: ComplianceIssueFilters): ComplianceIssue[] {
-    if (!filters || (!filters.severity && !filters.status)) {
-      return complianceIssues.findAll();
-    }
-
-    return complianceIssues.findMany((issue) => {
-      if (filters.severity && issue.severity !== filters.severity) return false;
-      if (filters.status && issue.status !== filters.status) return false;
-      return true;
+  async createComplianceIssue(data: CreateComplianceIssueInput): Promise<ComplianceIssue> {
+    return prisma.complianceIssue.create({
+      data: {
+        auditId: data.auditId ?? null,
+        severity: data.severity as any,
+        description: data.description,
+        owner: data.owner,
+        dueDate: new Date(data.dueDate),
+        status: "open",
+      },
     });
   }
 
-  /**
-   * Update a compliance issue's status. 404 if not found.
-   * Status must be one of: open, in_progress, resolved, closed.
-   */
-  updateComplianceIssue(
-    id: number,
-    data: { status: ComplianceStatus }
-  ): ComplianceIssue {
-    const existing = complianceIssues.findById(id);
-    if (!existing) {
-      const error: any = new Error(`Compliance issue with id ${id} not found`);
-      error.statusCode = 404;
-      throw error;
-    }
+  async getComplianceIssues(filters?: ComplianceIssueFilters): Promise<ComplianceIssue[]> {
+    return prisma.complianceIssue.findMany({
+      where: {
+        ...(filters?.severity && { severity: filters.severity as any }),
+        ...(filters?.status && { status: filters.status as any }),
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
 
-    const validStatuses: ComplianceStatus[] = [
-      "open",
-      "in_progress",
-      "resolved",
-      "closed",
-    ];
+  async updateComplianceIssue(id: number, data: { status: string }): Promise<ComplianceIssue> {
+    const validStatuses = ["open", "in_progress", "resolved", "closed"];
     if (!validStatuses.includes(data.status)) {
-      const error: any = new Error(
-        `Invalid status "${data.status}". Must be one of: ${validStatuses.join(", ")}`
+      throwError(
+        `Invalid status "${data.status}". Must be one of: ${validStatuses.join(", ")}`,
+        400
       );
-      error.statusCode = 400;
-      throw error;
     }
 
-    const updated = complianceIssues.update(id, { status: data.status })!;
-    return updated;
+    const existing = await prisma.complianceIssue.findUnique({ where: { id } });
+    if (!existing) throwError(`Compliance issue with id ${id} not found`, 404);
+
+    return prisma.complianceIssue.update({
+      where: { id },
+      data: { status: data.status as any },
+    });
   }
 }

@@ -52,7 +52,7 @@ app.listen(env.PORT, () => {
   ║  🌿 EcoSphere ESG Backend                    ║
   ║  Running on http://localhost:${env.PORT}            ║
   ║  Health check: http://localhost:${env.PORT}/api/health ║
-  ║  Mode: In-Memory Store (no database)          ║
+  ║  Mode: PostgreSQL via Prisma (Neon)           ║
   ╚═══════════════════════════════════════════════╝
   `);
 });

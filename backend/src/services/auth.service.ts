@@ -1,76 +1,90 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
-import { users } from "../store/index.js";
-import type { User, SafeUser, AuthUser } from "../types/index.js";
+import prisma from "../database/prisma.js";
+import type { User } from "@prisma/client";
+
+// ── Types ──────────────────────────────────────
+
+export type SafeUser = Omit<User, "password">;
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  departmentId: number | null;
+}
+
+// ── Helpers ────────────────────────────────────
+
+function sanitizeUser(user: User): SafeUser {
+  const { password, ...safeUser } = user;
+  return safeUser;
+}
+
+function throwError(message: string, statusCode: number): never {
+  const error: any = new Error(message);
+  error.statusCode = statusCode;
+  throw error;
+}
+
+// ── Service ───────────────────────────────────
 
 export class AuthService {
-  private sanitizeUser(user: User): SafeUser {
-    const { password, ...safeUser } = user;
-    return safeUser as SafeUser;
-  }
-
-  signup(email: string, password: string, name: string): SafeUser {
-    const existing = users.findOne({ email });
+  async signup(email: string, password: string, name: string): Promise<SafeUser> {
+    const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      const error: any = new Error("A user with this email already exists");
-      error.statusCode = 409;
-      throw error;
+      throwError("A user with this email already exists", 409);
     }
 
-    const hashedPassword = bcrypt.hashSync(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = users.create({
-      email,
-      password: hashedPassword,
-      name,
-      role: "employee" as const,
-      totalXp: 0,
-      isActive: true,
-      createdAt: new Date(),
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        role: "employee",
+        totalXp: 0,
+        isActive: true,
+      },
     });
 
-    return this.sanitizeUser(user);
+    return sanitizeUser(user);
   }
 
-  login(email: string, password: string): AuthUser {
-    const user = users.findOne({ email });
+  async login(email: string, password: string): Promise<{ token: string; user: SafeUser }> {
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      const error: any = new Error("Invalid email or password");
-      error.statusCode = 401;
-      throw error;
+      throwError("Invalid email or password", 401);
     }
 
-    const isMatch = bcrypt.compareSync(password, user.password);
+    const isMatch = await bcrypt.compare(password, user!.password);
     if (!isMatch) {
-      const error: any = new Error("Invalid email or password");
-      error.statusCode = 401;
-      throw error;
+      throwError("Invalid email or password", 401);
     }
 
     const token = jwt.sign(
       {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        departmentId: user.departmentId,
+        id: user!.id,
+        email: user!.email,
+        name: user!.name,
+        role: user!.role,
+        departmentId: user!.departmentId,
       },
       env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    return { token, user: this.sanitizeUser(user) };
+    return { token, user: sanitizeUser(user!) };
   }
 
-  getProfile(userId: string): SafeUser {
-    const user = users.findOne({ id: userId });
+  async getProfile(userId: number): Promise<SafeUser> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      const error: any = new Error("User not found");
-      error.statusCode = 404;
-      throw error;
+      throwError("User not found", 404);
     }
-
-    return this.sanitizeUser(user);
+    return sanitizeUser(user!);
   }
 }

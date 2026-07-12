@@ -1,24 +1,15 @@
-import {
-  emissionFactors,
-  carbonTransactions,
-  environmentalGoals,
-} from "../store/index.js";
-import type {
-  EmissionFactor,
-  CarbonTransaction,
-  EnvironmentalGoal,
-} from "../types/index.js";
+import prisma from "../database/prisma.js";
+import type { EmissionFactor, CarbonTransaction, EnvironmentalGoal } from "@prisma/client";
 
-// ── Helper: structured error with statusCode ──
-class ServiceError extends Error {
-  statusCode: number;
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
-  }
+// ── Helper ─────────────────────────────────────
+
+function throwError(message: string, statusCode: number): never {
+  const error: any = new Error(message);
+  error.statusCode = statusCode;
+  throw error;
 }
 
-// ── Input types ───────────────────────────────
+// ── Input types ────────────────────────────────
 
 interface CreateEmissionFactorInput {
   name: string;
@@ -49,133 +40,110 @@ interface CreateGoalInput {
   deadline: string | Date;
 }
 
-// ── Service ───────────────────────────────────
+// ── Service ────────────────────────────────────
 
 export class EnvironmentalService {
   // ─── Emission Factors ─────────────────────
 
-  createEmissionFactor(data: CreateEmissionFactorInput): EmissionFactor {
-    return emissionFactors.create({
-      name: data.name,
-      factor: data.factor,
-      unit: data.unit,
-      categoryId: data.categoryId ?? null,
-      createdAt: new Date(),
+  async createEmissionFactor(data: CreateEmissionFactorInput): Promise<EmissionFactor> {
+    return prisma.emissionFactor.create({
+      data: {
+        name: data.name,
+        factor: data.factor,
+        unit: data.unit,
+        categoryId: data.categoryId ?? null,
+      },
     });
   }
 
-  getAllEmissionFactors(): EmissionFactor[] {
-    return emissionFactors.findAll();
+  async getAllEmissionFactors(): Promise<EmissionFactor[]> {
+    return prisma.emissionFactor.findMany({ orderBy: { createdAt: "asc" } });
   }
 
-  updateEmissionFactor(
-    id: number,
-    data: Partial<CreateEmissionFactorInput>
-  ): EmissionFactor {
-    const updated = emissionFactors.update(id, data);
-    if (!updated) {
-      throw new ServiceError(
-        `Emission factor with id ${id} not found`,
-        404
-      );
-    }
-    return updated;
+  async updateEmissionFactor(id: number, data: Partial<CreateEmissionFactorInput>): Promise<EmissionFactor> {
+    const existing = await prisma.emissionFactor.findUnique({ where: { id } });
+    if (!existing) throwError(`Emission factor with id ${id} not found`, 404);
+
+    return prisma.emissionFactor.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.factor !== undefined && { factor: data.factor }),
+        ...(data.unit !== undefined && { unit: data.unit }),
+        ...(data.categoryId !== undefined && { categoryId: data.categoryId ?? null }),
+      },
+    });
   }
 
-  deleteEmissionFactor(id: number): void {
-    const deleted = emissionFactors.delete(id);
-    if (!deleted) {
-      throw new ServiceError(
-        `Emission factor with id ${id} not found`,
-        404
-      );
-    }
+  async deleteEmissionFactor(id: number): Promise<void> {
+    const existing = await prisma.emissionFactor.findUnique({ where: { id } });
+    if (!existing) throwError(`Emission factor with id ${id} not found`, 404);
+    await prisma.emissionFactor.delete({ where: { id } });
   }
 
   // ─── Carbon Transactions ──────────────────
 
-  createCarbonTransaction(
-    data: CreateCarbonTransactionInput
-  ): CarbonTransaction {
-    // Look up the emission factor to compute carbonEmitted
-    const ef = emissionFactors.findById(data.emissionFactorId);
-    if (!ef) {
-      throw new ServiceError(
-        `Emission factor with id ${data.emissionFactorId} not found`,
-        404
-      );
-    }
+  async createCarbonTransaction(data: CreateCarbonTransactionInput): Promise<CarbonTransaction> {
+    const ef = await prisma.emissionFactor.findUnique({ where: { id: data.emissionFactorId } });
+    if (!ef) throwError(`Emission factor with id ${data.emissionFactorId} not found`, 404);
 
-    const carbonEmitted = data.value * ef.factor;
+    const carbonEmitted = data.value * ef!.factor;
 
-    return carbonTransactions.create({
-      source: data.source,
-      emissionFactorId: data.emissionFactorId,
-      value: data.value,
-      carbonEmitted,
-      departmentId: data.departmentId,
-      date: new Date(data.date),
-      createdBy: data.createdBy,
-      createdAt: new Date(),
+    return prisma.carbonTransaction.create({
+      data: {
+        source: data.source,
+        emissionFactorId: data.emissionFactorId,
+        value: data.value,
+        carbonEmitted,
+        departmentId: data.departmentId,
+        date: new Date(data.date),
+        createdBy: data.createdBy,
+      },
     });
   }
 
-  getCarbonTransactions(
-    filters: CarbonTransactionFilters = {}
-  ): CarbonTransaction[] {
-    return carbonTransactions.findMany((tx) => {
-      // Filter by departmentId
-      if (
-        filters.departmentId !== undefined &&
-        tx.departmentId !== filters.departmentId
-      ) {
-        return false;
-      }
-
-      // Filter by date range
-      if (filters.startDate) {
-        const start = new Date(filters.startDate);
-        if (new Date(tx.date) < start) return false;
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        if (new Date(tx.date) > end) return false;
-      }
-
-      return true;
+  async getCarbonTransactions(filters: CarbonTransactionFilters = {}): Promise<CarbonTransaction[]> {
+    return prisma.carbonTransaction.findMany({
+      where: {
+        ...(filters.departmentId !== undefined && { departmentId: filters.departmentId }),
+        ...(filters.startDate || filters.endDate
+          ? {
+              date: {
+                ...(filters.startDate && { gte: new Date(filters.startDate) }),
+                ...(filters.endDate && { lte: new Date(filters.endDate) }),
+              },
+            }
+          : {}),
+      },
+      orderBy: { date: "desc" },
     });
   }
 
-  getCarbonSummary(filters: CarbonTransactionFilters = {}): {
+  async getCarbonSummary(filters: CarbonTransactionFilters = {}): Promise<{
     totalEmissions: number;
     byDepartment: { departmentId: number; totalEmissions: number }[];
     trend: { date: string; emissions: number }[];
-  } {
-    const transactions = this.getCarbonTransactions(filters);
+  }> {
+    const transactions = await this.getCarbonTransactions(filters);
 
-    // Total emissions
-    const totalEmissions = transactions.reduce(
-      (sum, tx) => sum + tx.carbonEmitted,
-      0
-    );
+    const totalEmissions = transactions.reduce((sum, tx) => sum + tx.carbonEmitted, 0);
 
-    // Group by department
     const deptMap = new Map<number, number>();
+    const trendMap = new Map<string, number>();
+
     for (const tx of transactions) {
       const current = deptMap.get(tx.departmentId) ?? 0;
       deptMap.set(tx.departmentId, current + tx.carbonEmitted);
-    }
-    const byDepartment = Array.from(deptMap.entries()).map(
-      ([departmentId, totalEmissions]) => ({ departmentId, totalEmissions })
-    );
 
-    // Trend: aggregate by date (YYYY-MM-DD)
-    const trendMap = new Map<string, number>();
-    for (const tx of transactions) {
       const dateKey = new Date(tx.date).toISOString().slice(0, 10);
-      const current = trendMap.get(dateKey) ?? 0;
-      trendMap.set(dateKey, current + tx.carbonEmitted);
+      trendMap.set(dateKey, (trendMap.get(dateKey) ?? 0) + tx.carbonEmitted);
     }
+
+    const byDepartment = Array.from(deptMap.entries()).map(([departmentId, totalEmissions]) => ({
+      departmentId,
+      totalEmissions,
+    }));
+
     const trend = Array.from(trendMap.entries())
       .map(([date, emissions]) => ({ date, emissions }))
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -185,48 +153,35 @@ export class EnvironmentalService {
 
   // ─── Environmental Goals ──────────────────
 
-  createGoal(data: CreateGoalInput): EnvironmentalGoal {
-    return environmentalGoals.create({
-      title: data.title,
-      targetValue: data.targetValue,
-      currentValue: 0,
-      departmentId: data.departmentId,
-      deadline: new Date(data.deadline),
-      status: "active",
-      createdAt: new Date(),
+  async createGoal(data: CreateGoalInput): Promise<EnvironmentalGoal> {
+    return prisma.environmentalGoal.create({
+      data: {
+        title: data.title,
+        targetValue: data.targetValue,
+        currentValue: 0,
+        departmentId: data.departmentId,
+        deadline: new Date(data.deadline),
+        status: "active",
+      },
     });
   }
 
-  getGoals(departmentId?: number): EnvironmentalGoal[] {
-    if (departmentId !== undefined) {
-      return environmentalGoals.findMany(
-        (g) => g.departmentId === departmentId
-      );
-    }
-    return environmentalGoals.findAll();
+  async getGoals(departmentId?: number): Promise<EnvironmentalGoal[]> {
+    return prisma.environmentalGoal.findMany({
+      where: departmentId !== undefined ? { departmentId } : {},
+      orderBy: { createdAt: "asc" },
+    });
   }
 
-  updateGoalProgress(
-    id: number,
-    currentValue: number
-  ): EnvironmentalGoal {
-    const goal = environmentalGoals.findById(id);
-    if (!goal) {
-      throw new ServiceError(
-        `Environmental goal with id ${id} not found`,
-        404
-      );
-    }
+  async updateGoalProgress(id: number, currentValue: number): Promise<EnvironmentalGoal> {
+    const goal = await prisma.environmentalGoal.findUnique({ where: { id } });
+    if (!goal) throwError(`Environmental goal with id ${id} not found`, 404);
 
-    const newStatus =
-      currentValue >= goal.targetValue ? "completed" : goal.status;
+    const newStatus = currentValue >= goal!.targetValue ? "completed" : goal!.status;
 
-    const updated = environmentalGoals.update(id, {
-      currentValue,
-      status: newStatus,
+    return prisma.environmentalGoal.update({
+      where: { id },
+      data: { currentValue, status: newStatus },
     });
-
-    // update always succeeds here because we already confirmed the record exists
-    return updated!;
   }
 }

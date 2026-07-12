@@ -1,47 +1,22 @@
-// ──────────────────────────────────────────────
-// Gamification Service — Challenges, Badges, Rewards, Leaderboard
-// ──────────────────────────────────────────────
+import prisma from "../database/prisma.js";
+import type { Challenge, ChallengeParticipation, Badge, UserBadge, Reward, RewardRedemption, User } from "@prisma/client";
 
-import {
-  challenges,
-  challengeParticipations,
-  badges,
-  userBadges,
-  rewards,
-  rewardRedemptions,
-  users,
-} from "../store/index.js";
+// ── Helper ─────────────────────────────────────
 
-import type {
-  Challenge,
-  ChallengeParticipation,
-  Badge,
-  UserBadge,
-  Reward,
-  RewardRedemption,
-  User,
-  Difficulty,
-  ChallengeStatus,
-} from "../types/index.js";
-
-// ── Helper: HTTP-style errors ─────────────────
-
-class ServiceError extends Error {
-  statusCode: number;
-  constructor(message: string, statusCode: number) {
-    super(message);
-    this.statusCode = statusCode;
-  }
+function throwError(message: string, statusCode: number): never {
+  const error: any = new Error(message);
+  error.statusCode = statusCode;
+  throw error;
 }
 
-// ── Input types ───────────────────────────────
+// ── Input types ────────────────────────────────
 
 interface CreateChallengeInput {
   title: string;
   categoryId?: number | null;
   description: string;
   xpReward: number;
-  difficulty: Difficulty;
+  difficulty: string;
   deadline?: Date | null;
 }
 
@@ -50,9 +25,9 @@ interface UpdateChallengeInput {
   categoryId?: number | null;
   description?: string;
   xpReward?: number;
-  difficulty?: Difficulty;
+  difficulty?: string;
   deadline?: Date | null;
-  status?: ChallengeStatus;
+  status?: string;
 }
 
 interface CreateBadgeInput {
@@ -69,20 +44,6 @@ interface CreateRewardInput {
   stock: number;
 }
 
-// ── Challenge with user participation overlay ─
-
-interface ChallengeWithParticipation extends Challenge {
-  participation?: ChallengeParticipation | null;
-}
-
-// ── User badge with badge details ─────────────
-
-interface UserBadgeWithDetails extends UserBadge {
-  badge?: Badge;
-}
-
-// ── Leaderboard entry ─────────────────────────
-
 interface LeaderboardEntry {
   rank: number;
   userId: number;
@@ -93,52 +54,38 @@ interface LeaderboardEntry {
   badgeCount: number;
 }
 
-interface UserRankResult {
-  rank: number;
-  totalXp: number;
-  badgeCount: number;
-  nextMilestone: number;
-}
-
-// ── Service ───────────────────────────────────
+// ── Service ────────────────────────────────────
 
 export class GamificationService {
-  // ────────────────────────────────────────────
-  // Challenges
-  // ────────────────────────────────────────────
+  // ── Challenges ──────────────────────────────
 
-  /** Create a new challenge with status='active'. */
-  createChallenge(data: CreateChallengeInput): Challenge {
-    const challenge = challenges.create({
-      title: data.title,
-      categoryId: data.categoryId ?? null,
-      description: data.description,
-      xpReward: data.xpReward,
-      difficulty: data.difficulty,
-      deadline: data.deadline ?? null,
-      status: "active" as ChallengeStatus,
-      createdAt: new Date(),
+  async createChallenge(data: CreateChallengeInput): Promise<Challenge> {
+    return prisma.challenge.create({
+      data: {
+        title: data.title,
+        categoryId: data.categoryId ?? null,
+        description: data.description,
+        xpReward: data.xpReward,
+        difficulty: data.difficulty as any,
+        deadline: data.deadline ?? null,
+        status: "active",
+      },
     });
-    return challenge;
   }
 
-  /**
-   * Get all active challenges.
-   * If userId is provided, attach the user's participation record (if any)
-   * to each challenge so the client knows the user's status.
-   */
-  getChallenges(userId?: number): ChallengeWithParticipation[] {
-    const activeChallenges = challenges.findAll({
-      status: "active" as ChallengeStatus,
+  async getChallenges(userId?: number): Promise<(Challenge & { participation: ChallengeParticipation | null })[]> {
+    const activeChallenges = await prisma.challenge.findMany({
+      where: { status: "active" },
+      orderBy: { createdAt: "asc" },
     });
 
     if (userId === undefined) {
       return activeChallenges.map((c) => ({ ...c, participation: null }));
     }
 
-    const userParticipations = challengeParticipations.findMany(
-      (p) => p.userId === userId
-    );
+    const userParticipations = await prisma.challengeParticipation.findMany({
+      where: { userId },
+    });
     const participationMap = new Map<number, ChallengeParticipation>();
     for (const p of userParticipations) {
       participationMap.set(p.challengeId, p);
@@ -150,371 +97,277 @@ export class GamificationService {
     }));
   }
 
-  /** Update a challenge by id. */
-  updateChallenge(id: number, data: UpdateChallengeInput): Challenge {
-    const updated = challenges.update(id, data);
-    if (!updated) {
-      throw new ServiceError("Challenge not found", 404);
-    }
-    return updated;
-  }
+  async updateChallenge(id: number, data: UpdateChallengeInput): Promise<Challenge> {
+    const existing = await prisma.challenge.findUnique({ where: { id } });
+    if (!existing) throwError("Challenge not found", 404);
 
-  // ────────────────────────────────────────────
-  // Challenge Participation
-  // ────────────────────────────────────────────
-
-  /** Join a challenge — creates a ChallengeParticipation. */
-  joinChallenge(userId: number, challengeId: number): ChallengeParticipation {
-    // Verify challenge exists
-    const challenge = challenges.findById(challengeId);
-    if (!challenge) {
-      throw new ServiceError("Challenge not found", 404);
-    }
-
-    // Verify user hasn't already joined
-    const existing = challengeParticipations.findOne(
-      (p) => p.userId === userId && p.challengeId === challengeId
-    );
-    if (existing) {
-      throw new ServiceError(
-        "You have already joined this challenge",
-        409
-      );
-    }
-
-    const participation = challengeParticipations.create({
-      userId,
-      challengeId,
-      proof: null,
-      status: "started",
-      xpAwarded: 0,
-      createdAt: new Date(),
+    return prisma.challenge.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.categoryId !== undefined && { categoryId: data.categoryId ?? null }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.xpReward !== undefined && { xpReward: data.xpReward }),
+        ...(data.difficulty !== undefined && { difficulty: data.difficulty as any }),
+        ...(data.deadline !== undefined && { deadline: data.deadline ?? null }),
+        ...(data.status !== undefined && { status: data.status as any }),
+      },
     });
-
-    return participation;
   }
 
-  /** Submit proof for a challenge participation. */
-  submitChallenge(
+  // ── Challenge Participation ──────────────────
+
+  async joinChallenge(userId: number, challengeId: number): Promise<ChallengeParticipation> {
+    const challenge = await prisma.challenge.findUnique({ where: { id: challengeId } });
+    if (!challenge) throwError("Challenge not found", 404);
+
+    const existing = await prisma.challengeParticipation.findUnique({
+      where: { userId_challengeId: { userId, challengeId } },
+    });
+    if (existing) throwError("You have already joined this challenge", 409);
+
+    return prisma.challengeParticipation.create({
+      data: {
+        userId,
+        challengeId,
+        proof: null,
+        status: "started",
+        xpAwarded: 0,
+      },
+    });
+  }
+
+  async submitChallenge(
     userId: number,
     challengeParticipationId: number,
     proof: string
-  ): ChallengeParticipation {
-    const participation = challengeParticipations.findById(
-      challengeParticipationId
-    );
-    if (!participation) {
-      throw new ServiceError("Challenge participation not found", 404);
+  ): Promise<ChallengeParticipation> {
+    const participation = await prisma.challengeParticipation.findUnique({
+      where: { id: challengeParticipationId },
+    });
+    if (!participation) throwError("Challenge participation not found", 404);
+    if (participation!.userId !== userId) throwError("This participation does not belong to you", 403);
+    if (participation!.status !== "started") {
+      throwError(`Cannot submit — current status is '${participation!.status}'`, 400);
     }
 
-    if (participation.userId !== userId) {
-      throw new ServiceError(
-        "This participation does not belong to you",
-        403
-      );
-    }
-
-    if (participation.status !== "started") {
-      throw new ServiceError(
-        `Cannot submit — current status is '${participation.status}'`,
-        400
-      );
-    }
-
-    const updated = challengeParticipations.update(
-      challengeParticipationId,
-      { status: "submitted", proof }
-    );
-
-    return updated!;
-  }
-
-  /** Get all challenge participations for a user. */
-  getUserChallenges(userId: number): (ChallengeParticipation & { challenge?: Challenge })[] {
-    const participations = challengeParticipations.findMany(
-      (p) => p.userId === userId
-    );
-
-    return participations.map((p) => {
-      const challenge = challenges.findById(p.challengeId);
-      return { ...p, challenge };
+    return prisma.challengeParticipation.update({
+      where: { id: challengeParticipationId },
+      data: { status: "submitted", proof },
     });
   }
 
-  /** Get all participations with status='submitted' (pending approval). */
-  getPendingChallengeApprovals(): (ChallengeParticipation & { challenge?: Challenge; user?: Omit<User, "password"> })[] {
-    const pending = challengeParticipations.findMany(
-      (p) => p.status === "submitted"
-    );
-
-    return pending.map((p) => {
-      const challenge = challenges.findById(p.challengeId);
-      const user = users.findById(p.userId);
-      const safeUser = user
-        ? (({ password, ...rest }) => rest)(user)
-        : undefined;
-      return { ...p, challenge, user: safeUser };
+  async getUserChallenges(userId: number): Promise<(ChallengeParticipation & { challenge: Challenge | null })[]> {
+    return prisma.challengeParticipation.findMany({
+      where: { userId },
+      include: { challenge: true },
+      orderBy: { createdAt: "desc" },
     });
   }
 
-  /** Approve a challenge participation — award XP to the user. */
-  approveChallengeParticipation(
-    id: number,
-    xpAwarded: number
-  ): ChallengeParticipation {
-    const participation = challengeParticipations.findById(id);
-    if (!participation) {
-      throw new ServiceError("Challenge participation not found", 404);
-    }
-
-    if (participation.status !== "submitted") {
-      throw new ServiceError(
-        `Cannot approve — current status is '${participation.status}'`,
-        400
-      );
-    }
-
-    const updated = challengeParticipations.update(id, {
-      status: "approved",
-      xpAwarded,
+  async getPendingChallengeApprovals(): Promise<
+    (ChallengeParticipation & { challenge: Challenge | null; user: Omit<User, "password"> | null })[]
+  > {
+    const pending = await prisma.challengeParticipation.findMany({
+      where: { status: "submitted" },
+      include: {
+        challenge: true,
+        user: true,
+      },
     });
 
-    // Add XP to user's totalXp
-    const user = users.findById(participation.userId);
-    if (user) {
-      users.update(user.id, {
-        totalXp: user.totalXp + xpAwarded,
-        updatedAt: new Date(),
-      });
-    }
-
-    return updated!;
-  }
-
-  /** Reject a challenge participation. */
-  rejectChallengeParticipation(id: number): ChallengeParticipation {
-    const participation = challengeParticipations.findById(id);
-    if (!participation) {
-      throw new ServiceError("Challenge participation not found", 404);
-    }
-
-    if (participation.status !== "submitted") {
-      throw new ServiceError(
-        `Cannot reject — current status is '${participation.status}'`,
-        400
-      );
-    }
-
-    const updated = challengeParticipations.update(id, {
-      status: "rejected",
-    });
-
-    return updated!;
-  }
-
-  // ────────────────────────────────────────────
-  // Badges
-  // ────────────────────────────────────────────
-
-  /** Create a new badge. */
-  createBadge(data: CreateBadgeInput): Badge {
-    const badge = badges.create({
-      name: data.name,
-      description: data.description,
-      unlockRule: data.unlockRule,
-      icon: data.icon ?? null,
-      createdAt: new Date(),
-    });
-    return badge;
-  }
-
-  /** Get all badges. */
-  getAllBadges(): Badge[] {
-    return badges.findAll();
-  }
-
-  /** Get badges earned by a user, joined with badge details. */
-  getUserBadges(userId: number): UserBadgeWithDetails[] {
-    const ubs = userBadges.findMany((ub) => ub.userId === userId);
-
-    return ubs.map((ub) => {
-      const badge = badges.findById(ub.badgeId);
-      return { ...ub, badge };
+    return pending.map(({ user, ...rest }) => {
+      if (!user) return { ...rest, user: null };
+      const { password, ...safeUser } = user;
+      return { ...rest, user: safeUser };
     });
   }
 
-  /** Award a badge to a user. */
-  awardBadge(userId: number, badgeId: number): UserBadge {
-    // Ensure badge exists
-    const badge = badges.findById(badgeId);
-    if (!badge) {
-      throw new ServiceError("Badge not found", 404);
+  async approveChallengeParticipation(id: number, xpAwarded: number): Promise<ChallengeParticipation> {
+    const participation = await prisma.challengeParticipation.findUnique({ where: { id } });
+    if (!participation) throwError("Challenge participation not found", 404);
+    if (participation!.status !== "submitted") {
+      throwError(`Cannot approve — current status is '${participation!.status}'`, 400);
     }
 
-    // Ensure user exists
-    const user = users.findById(userId);
-    if (!user) {
-      throw new ServiceError("User not found", 404);
+    const [updated] = await prisma.$transaction([
+      prisma.challengeParticipation.update({
+        where: { id },
+        data: { status: "approved", xpAwarded },
+      }),
+      prisma.user.update({
+        where: { id: participation!.userId },
+        data: { totalXp: { increment: xpAwarded } },
+      }),
+    ]);
+
+    return updated;
+  }
+
+  async rejectChallengeParticipation(id: number): Promise<ChallengeParticipation> {
+    const participation = await prisma.challengeParticipation.findUnique({ where: { id } });
+    if (!participation) throwError("Challenge participation not found", 404);
+    if (participation!.status !== "submitted") {
+      throwError(`Cannot reject — current status is '${participation!.status}'`, 400);
     }
 
-    // Check not already awarded
-    const existing = userBadges.findOne(
-      (ub) => ub.userId === userId && ub.badgeId === badgeId
-    );
-    if (existing) {
-      throw new ServiceError(
-        "Badge has already been awarded to this user",
-        409
-      );
-    }
-
-    const ub = userBadges.create({
-      userId,
-      badgeId,
-      earnedAt: new Date(),
+    return prisma.challengeParticipation.update({
+      where: { id },
+      data: { status: "rejected" },
     });
-
-    return ub;
   }
 
-  // ────────────────────────────────────────────
-  // Rewards
-  // ────────────────────────────────────────────
+  // ── Badges ──────────────────────────────────
 
-  /** Create a new reward. */
-  createReward(data: CreateRewardInput): Reward {
-    const reward = rewards.create({
-      name: data.name,
-      description: data.description,
-      pointsRequired: data.pointsRequired,
-      stock: data.stock,
-      createdAt: new Date(),
+  async createBadge(data: CreateBadgeInput): Promise<Badge> {
+    return prisma.badge.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        unlockRule: data.unlockRule,
+        icon: data.icon ?? null,
+      },
     });
-    return reward;
   }
 
-  /** Get all rewards. */
-  getRewards(): Reward[] {
-    return rewards.findAll();
+  async getAllBadges(): Promise<Badge[]> {
+    return prisma.badge.findMany({ orderBy: { createdAt: "asc" } });
   }
 
-  /** Redeem a reward — deduct XP, decrement stock, create redemption. */
-  redeemReward(
+  async getUserBadges(userId: number): Promise<(UserBadge & { badge: Badge | null })[]> {
+    return prisma.userBadge.findMany({
+      where: { userId },
+      include: { badge: true },
+      orderBy: { earnedAt: "desc" },
+    });
+  }
+
+  async awardBadge(userId: number, badgeId: number): Promise<UserBadge> {
+    const badge = await prisma.badge.findUnique({ where: { id: badgeId } });
+    if (!badge) throwError("Badge not found", 404);
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throwError("User not found", 404);
+
+    const existing = await prisma.userBadge.findUnique({
+      where: { userId_badgeId: { userId, badgeId } },
+    });
+    if (existing) throwError("Badge has already been awarded to this user", 409);
+
+    return prisma.userBadge.create({
+      data: { userId, badgeId },
+    });
+  }
+
+  // ── Rewards ──────────────────────────────────
+
+  async createReward(data: CreateRewardInput): Promise<Reward> {
+    return prisma.reward.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        pointsRequired: data.pointsRequired,
+        stock: data.stock,
+      },
+    });
+  }
+
+  async getRewards(): Promise<Reward[]> {
+    return prisma.reward.findMany({ orderBy: { createdAt: "asc" } });
+  }
+
+  async redeemReward(
     userId: number,
     rewardId: number
-  ): { redemption: RewardRedemption; remainingPoints: number } {
-    // Check reward exists
-    const reward = rewards.findById(rewardId);
-    if (!reward) {
-      throw new ServiceError("Reward not found", 404);
-    }
+  ): Promise<{ redemption: RewardRedemption; remainingPoints: number }> {
+    const reward = await prisma.reward.findUnique({ where: { id: rewardId } });
+    if (!reward) throwError("Reward not found", 404);
+    if (reward!.stock <= 0) throwError("This reward is out of stock", 400);
 
-    // Check stock
-    if (reward.stock <= 0) {
-      throw new ServiceError("This reward is out of stock", 400);
-    }
-
-    // Check user
-    const user = users.findById(userId);
-    if (!user) {
-      throw new ServiceError("User not found", 404);
-    }
-
-    // Check sufficient points
-    if (user.totalXp < reward.pointsRequired) {
-      throw new ServiceError(
-        `Insufficient points — you have ${user.totalXp} XP but need ${reward.pointsRequired}`,
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throwError("User not found", 404);
+    if (user!.totalXp < reward!.pointsRequired) {
+      throwError(
+        `Insufficient points — you have ${user!.totalXp} XP but need ${reward!.pointsRequired}`,
         400
       );
     }
 
-    // Deduct points from user
-    const remainingPoints = user.totalXp - reward.pointsRequired;
-    users.update(user.id, {
-      totalXp: remainingPoints,
-      updatedAt: new Date(),
-    });
+    const remainingPoints = user!.totalXp - reward!.pointsRequired;
 
-    // Decrement stock
-    rewards.update(rewardId, { stock: reward.stock - 1 });
-
-    // Create redemption record
-    const redemption = rewardRedemptions.create({
-      userId,
-      rewardId,
-      redeemedAt: new Date(),
-    });
+    const [redemption] = await prisma.$transaction([
+      prisma.rewardRedemption.create({
+        data: { userId, rewardId },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { totalXp: remainingPoints },
+      }),
+      prisma.reward.update({
+        where: { id: rewardId },
+        data: { stock: { decrement: 1 } },
+      }),
+    ]);
 
     return { redemption, remainingPoints };
   }
 
-  // ────────────────────────────────────────────
-  // Leaderboard
-  // ────────────────────────────────────────────
+  // ── Leaderboard ──────────────────────────────
 
-  /**
-   * Get leaderboard sorted by totalXp DESC.
-   * Returns paginated results with rank, badge count, etc.
-   */
-  getLeaderboard(
+  async getLeaderboard(
     limit: number = 100,
     offset: number = 0
-  ): { items: LeaderboardEntry[]; total: number; limit: number; offset: number } {
-    // Get all active users sorted by totalXp DESC
-    const activeUsers = users
-      .findMany((u) => u.isActive)
-      .sort((a, b) => b.totalXp - a.totalXp);
+  ): Promise<{ items: LeaderboardEntry[]; total: number; limit: number; offset: number }> {
+    const total = await prisma.user.count({ where: { isActive: true } });
 
-    const total = activeUsers.length;
+    const activeUsers = await prisma.user.findMany({
+      where: { isActive: true },
+      orderBy: { totalXp: "desc" },
+      skip: offset,
+      take: limit,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        departmentId: true,
+        totalXp: true,
+        _count: { select: { userBadges: true } },
+      },
+    });
 
-    // Build ranked entries for the full list first so ranks are global
-    const rankedAll: LeaderboardEntry[] = activeUsers.map((u, idx) => ({
-      rank: idx + 1,
+    const items: LeaderboardEntry[] = activeUsers.map((u, idx) => ({
+      rank: offset + idx + 1,
       userId: u.id,
       name: u.name,
       email: u.email,
       departmentId: u.departmentId,
       totalXp: u.totalXp,
-      badgeCount: userBadges.count((ub) => ub.userId === u.id),
+      badgeCount: u._count.userBadges,
     }));
-
-    // Paginate
-    const items = rankedAll.slice(offset, offset + limit);
 
     return { items, total, limit, offset };
   }
 
-  /**
-   * Get a specific user's rank position on the leaderboard.
-   * Returns rank, XP, badge count, and next XP milestone.
-   */
-  getUserRank(userId: number): UserRankResult {
-    const user = users.findById(userId);
-    if (!user) {
-      throw new ServiceError("User not found", 404);
-    }
+  async getUserRank(userId: number): Promise<{
+    rank: number;
+    totalXp: number;
+    badgeCount: number;
+    nextMilestone: number;
+  }> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throwError("User not found", 404);
 
-    // Sort all active users by totalXp DESC
-    const activeUsers = users
-      .findMany((u) => u.isActive)
-      .sort((a, b) => b.totalXp - a.totalXp);
+    // Count users with more XP than this user to determine rank
+    const usersAbove = await prisma.user.count({
+      where: { isActive: true, totalXp: { gt: user!.totalXp } },
+    });
+    const rank = usersAbove + 1;
 
-    // Find rank (1-indexed)
-    const rank =
-      activeUsers.findIndex((u) => u.id === userId) + 1 || activeUsers.length;
+    const badgeCount = await prisma.userBadge.count({ where: { userId } });
 
-    const badgeCount = userBadges.count((ub) => ub.userId === userId);
-
-    // Calculate next milestone (next 100 XP boundary above current)
     const milestoneStep = 100;
-    const nextMilestone =
-      Math.ceil((user.totalXp + 1) / milestoneStep) * milestoneStep;
+    const nextMilestone = Math.ceil((user!.totalXp + 1) / milestoneStep) * milestoneStep;
 
-    return {
-      rank,
-      totalXp: user.totalXp,
-      badgeCount,
-      nextMilestone,
-    };
+    return { rank, totalXp: user!.totalXp, badgeCount, nextMilestone };
   }
 }
