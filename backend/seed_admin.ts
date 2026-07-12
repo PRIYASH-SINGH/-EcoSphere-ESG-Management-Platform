@@ -5,26 +5,24 @@ const prisma = new PrismaClient();
 
 async function main() {
   const email = 'admin@ecosphere.com';
-  const password = 'admin';
+  const password = 'admin123'; // Must be 6+ chars for Zod validation
 
-  // Check if user already exists
-  const existingUser = await prisma.user.findUnique({ where: { email } });
+  const hashedPassword = await bcrypt.hash(password, 10);
   
-  if (!existingUser) {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name: 'System Admin',
-        role: 'admin',
-        isActive: true,
-      }
-    });
-    console.log('Admin user created successfully.');
-  } else {
-    console.log('Admin user already exists.');
-  }
+  await prisma.user.upsert({
+    where: { email },
+    update: {
+      password: hashedPassword,
+    },
+    create: {
+      email,
+      password: hashedPassword,
+      name: 'System Admin',
+      role: 'admin',
+      isActive: true,
+    }
+  });
+  console.log('Admin user updated with password "admin123".');
 }
 
 main()
