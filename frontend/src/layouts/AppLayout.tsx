@@ -1,5 +1,6 @@
 import { Bell, MessageSquare, Search } from "lucide-react";
 import { ReactNode } from "react";
+import { NavLink } from "react-router-dom";
 import { navigation } from "../services/dashboardData";
 
 export function AppLayout({ children }: { children: ReactNode }) {
@@ -17,13 +18,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </a>
 
         <nav className="nav-list">
-          {navigation.map((item, index) => {
+          {navigation.map((item) => {
             const Icon = item.icon;
             return (
-              <a className={`nav-item ${index === 0 ? "active" : ""}`} href="#" key={item.label}>
+              <NavLink 
+                to={item.path} 
+                key={item.label}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              >
                 <Icon size={20} aria-hidden="true" />
                 {item.label}
-              </a>
+              </NavLink>
             );
           })}
         </nav>
