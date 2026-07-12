@@ -1,0 +1,1212 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// 1. CORE & IDENTITY MODULES
+// ==========================================
+
+model Organization {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String   @db.VarChar(255)
+  taxIdentifier       String?  @map("tax_identifier") @db.VarChar(100)
+  industrySector      String?  @map("industry_sector") @db.VarChar(100)
+  headquartersCountry String?  @map("headquarters_country") @db.VarChar(100)
+  
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy           String?  @map("created_by") @db.Uuid
+  updatedBy           String?  @map("updated_by") @db.Uuid
+  isDeleted           Boolean  @default(false) @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Audit Relations
+  createdByUser       User?    @relation("OrgCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser       User?    @relation("OrgUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // Reverse Relations
+  users               User[]   @relation("OrgUsers")
+  roles               Role[]
+  permissions         Permission[]
+  locations           Location[]
+  departments         Department[]
+  carbonEmissions     CarbonEmission[]
+  energyConsumptions  EnergyConsumption[]
+  waterConsumptions   WaterConsumption[]
+  wasteManagements    WasteManagement[]
+  renewableEnergies   RenewableEnergy[]
+  environmentalGoals  EnvironmentalGoal[]
+  csrActivities       CsrActivity[]
+  volunteerPrograms   VolunteerProgram[]
+  trainingRecords     TrainingRecord[]
+  healthSafetyMetrics HealthSafetyMetric[]
+  diversityMetrics    DiversityMetric[]
+  audits              Audit[]
+  complianceIssues    ComplianceIssue[]
+  policies            Policy[]
+  riskRegisters       RiskRegister[]
+  boardMembers        BoardMember[]
+  incidents           Incident[]
+  challenges          Challenge[]
+  rewards             Reward[]
+  badges              Badge[]
+  leaderboards        Leaderboard[]
+  reportTemplates     ReportTemplate[]
+  generatedReports    GeneratedReport[]
+  kpiMetrics          KpiMetric[]
+  settings            Setting[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  email          String   @db.VarChar(255)
+  passwordHash   String   @map("password_hash") @db.VarChar(255)
+  firstName      String?  @map("first_name") @db.VarChar(100)
+  lastName       String?  @map("last_name") @db.VarChar(100)
+  isActive       Boolean  @default(true) @map("is_active")
+  mfaEnabled     Boolean  @default(false) @map("mfa_enabled")
+  mfaSecret      String?  @map("mfa_secret") @db.VarChar(100)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  // Core Relations
+  organization   Organization @relation("OrgUsers", fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  
+  // Audit Relations (Self & Target Models)
+  createdByUser  User?    @relation("UserCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("UserUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  usersCreated   User[]   @relation("UserCreatedBy")
+  usersUpdated   User[]   @relation("UserUpdatedBy")
+  orgsCreated    Organization[] @relation("OrgCreatedBy")
+  orgsUpdated    Organization[] @relation("OrgUpdatedBy")
+
+  rolesCreated   Role[]   @relation("RoleCreatedBy")
+  rolesUpdated   Role[]   @relation("RoleUpdatedBy")
+  userRoles      UserRole[]
+  userRolesCreated UserRole[] @relation("UserRoleCreatedBy")
+  userRolesUpdated UserRole[] @relation("UserRoleUpdatedBy")
+
+  permissionsCreated Permission[] @relation("PermissionCreatedBy")
+  permissionsUpdated Permission[] @relation("PermissionUpdatedBy")
+  rolePermissionsCreated RolePermission[] @relation("RolePermCreatedBy")
+  rolePermissionsUpdated RolePermission[] @relation("RolePermUpdatedBy")
+
+  locationsCreated Location[] @relation("LocCreatedBy")
+  locationsUpdated Location[] @relation("LocUpdatedBy")
+
+  departmentsCreated Department[] @relation("DeptCreatedBy")
+  departmentsUpdated Department[] @relation("DeptUpdatedBy")
+
+  teamsCreated   Team[]   @relation("TeamCreatedBy")
+  teamsUpdated   Team[]   @relation("TeamUpdatedBy")
+
+  employees      Employee[] @relation("EmployeeUser")
+  employeesCreated Employee[] @relation("EmpCreatedBy")
+  employeesUpdated Employee[] @relation("EmpUpdatedBy")
+
+  emissionSourcesCreated EmissionSource[] @relation("SrcCreatedBy")
+  emissionSourcesUpdated EmissionSource[] @relation("SrcUpdatedBy")
+
+  carbonEmissionsCreated CarbonEmission[] @relation("CarCreatedBy")
+  carbonEmissionsUpdated CarbonEmission[] @relation("CarUpdatedBy")
+
+  energyConsumptionsCreated EnergyConsumption[] @relation("EneCreatedBy")
+  energyConsumptionsUpdated EnergyConsumption[] @relation("EneUpdatedBy")
+
+  waterConsumptionsCreated WaterConsumption[] @relation("WatCreatedBy")
+  waterConsumptionsUpdated WaterConsumption[] @relation("WatUpdatedBy")
+
+  wasteManagementsCreated WasteManagement[] @relation("WstCreatedBy")
+  wasteManagementsUpdated WasteManagement[] @relation("WstUpdatedBy")
+
+  renewableEnergiesCreated RenewableEnergy[] @relation("RenCreatedBy")
+  renewableEnergiesUpdated RenewableEnergy[] @relation("RenUpdatedBy")
+
+  environmentalGoalsCreated EnvironmentalGoal[] @relation("EnvCreatedBy")
+  environmentalGoalsUpdated EnvironmentalGoal[] @relation("EnvUpdatedBy")
+
+  csrActivitiesCreated CsrActivity[] @relation("CsrCreatedBy")
+  csrActivitiesUpdated CsrActivity[] @relation("CsrUpdatedBy")
+
+  employeeParticipationCreated EmployeeParticipation[] @relation("PartCreatedBy")
+  employeeParticipationUpdated EmployeeParticipation[] @relation("PartUpdatedBy")
+
+  volunteerProgramsCreated VolunteerProgram[] @relation("VolCreatedBy")
+  volunteerProgramsUpdated VolunteerProgram[] @relation("VolUpdatedBy")
+
+  trainingRecordsCreated TrainingRecord[] @relation("TraCreatedBy")
+  trainingRecordsUpdated TrainingRecord[] @relation("TraUpdatedBy")
+
+  healthSafetyMetricsCreated HealthSafetyMetric[] @relation("HseCreatedBy")
+  healthSafetyMetricsUpdated HealthSafetyMetric[] @relation("HseUpdatedBy")
+
+  diversityMetricsCreated DiversityMetric[] @relation("DivCreatedBy")
+  diversityMetricsUpdated DiversityMetric[] @relation("DivUpdatedBy")
+
+  auditsCreated   Audit[]  @relation("AudCreatedBy")
+  auditsUpdated   Audit[]  @relation("AudUpdatedBy")
+
+  complianceIssuesCreated ComplianceIssue[] @relation("ComCreatedBy")
+  complianceIssuesUpdated ComplianceIssue[] @relation("ComUpdatedBy")
+
+  policiesCreated Policy[] @relation("PolCreatedBy")
+  policiesUpdated Policy[] @relation("PolUpdatedBy")
+
+  riskRegistersCreated RiskRegister[] @relation("RskCreatedBy")
+  riskRegistersUpdated RiskRegister[] @relation("RskUpdatedBy")
+
+  boardMembersCreated BoardMember[] @relation("BrdCreatedBy")
+  boardMembersUpdated BoardMember[] @relation("BrdUpdatedBy")
+
+  incidentsCreated Incident[] @relation("IncCreatedBy")
+  incidentsUpdated Incident[] @relation("IncUpdatedBy")
+
+  challengesCreated Challenge[] @relation("ChaCreatedBy")
+  challengesUpdated Challenge[] @relation("ChaUpdatedBy")
+
+  rewardsCreated Reward[]  @relation("RewCreatedBy")
+  rewardsUpdated Reward[]  @relation("RewUpdatedBy")
+
+  badgesCreated   Badge[]  @relation("BadCreatedBy")
+  badgesUpdated   Badge[]  @relation("BadUpdatedBy")
+
+  pointsLedgersCreated PointsLedger[] @relation("PtsCreatedBy")
+  pointsLedgersUpdated PointsLedger[] @relation("PtsUpdatedBy")
+
+  leaderboardsCreated Leaderboard[] @relation("LdbCreatedBy")
+  leaderboardsUpdated Leaderboard[] @relation("LdbUpdatedBy")
+
+  reportTemplatesCreated ReportTemplate[] @relation("RptCreatedBy")
+  reportTemplatesUpdated ReportTemplate[] @relation("RptUpdatedBy")
+
+  generatedReportsCreated GeneratedReport[] @relation("GenCreatedBy")
+  generatedReportsUpdated GeneratedReport[] @relation("GenUpdatedBy")
+
+  kpiMetricsCreated KpiMetric[] @relation("KpiCreatedBy")
+  kpiMetricsUpdated KpiMetric[] @relation("KpiUpdatedBy")
+
+  notificationsCreated Notification[] @relation("NotCreatedBy")
+  notificationsUpdated Notification[] @relation("NotUpdatedBy")
+  notificationsReceived Notification[] @relation("NotReceived")
+
+  activityLogsCreated ActivityLog[] @relation("ActCreatedBy")
+  activityLogsUpdated ActivityLog[] @relation("ActUpdatedBy")
+  activityLogs        ActivityLog[] @relation("ActUser")
+
+  auditLogsCreated AuditLog[] @relation("AudLogCreatedBy")
+  auditLogsUpdated AuditLog[] @relation("AudLogUpdatedBy")
+  auditLogs        AuditLog[] @relation("AudLogUser")
+
+  settingsCreated Setting[] @relation("SetCreatedBy")
+  settingsUpdated Setting[] @relation("SetUpdatedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(100)
+  description    String?
+  isSystem       Boolean  @default(false) @map("is_system")
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("RoleCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("RoleUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  action         String   @db.VarChar(100)
+  description    String?
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("PermissionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("PermissionUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy    String?  @map("created_by") @db.Uuid
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  role         Role        @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  permission   Permission  @relation(fields: [permissionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User?      @relation("RolePermCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User?      @relation("RolePermUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([roleId, permissionId], name: "uq_role_permission")
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+  isDeleted Boolean  @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User? @relation("UserRoleCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User? @relation("UserRoleUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([userId, roleId], name: "uq_user_role")
+  @@map("user_roles")
+}
+
+// ==========================================
+// 2. ORGANIZATION STRUCTURE MODULE
+// ==========================================
+
+model Location {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  name               String   @db.VarChar(255)
+  type               String   @db.VarChar(100)
+  address            String?  @db.VarChar(255)
+  city               String?  @db.VarChar(100)
+  region             String?  @db.VarChar(100)
+  country            String   @db.VarChar(100)
+  latitude           Decimal? @db.Decimal(9, 6)
+  longitude          Decimal? @db.Decimal(9, 6)
+  gridEmissionFactor Decimal? @map("grid_emission_factor") @db.Decimal(12, 6)
+  
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy          String?  @map("created_by") @db.Uuid
+  updatedBy          String?  @map("updated_by") @db.Uuid
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser      User?    @relation("LocCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser      User?    @relation("LocUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  departments         Department[]
+  employees           Employee[]
+  emissionSources     EmissionSource[]
+  carbonEmissions     CarbonEmission[]
+  energyConsumptions  EnergyConsumption[]
+  waterConsumptions   WaterConsumption[]
+  wasteManagements    WasteManagement[]
+  renewableEnergies   RenewableEnergy[]
+  healthSafetyMetrics HealthSafetyMetric[]
+  audits              Audit[]
+  incidents           Incident[]
+
+  @@map("locations")
+}
+
+model Department {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String?  @map("location_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  code           String?  @db.VarChar(50)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location       Location?    @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("DeptCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("DeptUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  teams          Team[]
+  employees      Employee[]
+
+  @@map("departments")
+}
+
+model Team {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  departmentId String   @map("department_id") @db.Uuid
+  name         String   @db.VarChar(255)
+  
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy    String?  @map("created_by") @db.Uuid
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User?    @relation("TeamCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User?    @relation("TeamUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  employees    Employee[]
+
+  @@map("teams")
+}
+
+model Employee {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  teamId       String?  @map("team_id") @db.Uuid
+  departmentId String   @map("department_id") @db.Uuid
+  locationId   String   @map("location_id") @db.Uuid
+  employeeCode String   @map("employee_code") @db.VarChar(100)
+  jobTitle     String?  @map("job_title") @db.VarChar(150)
+  gender       String?  @db.VarChar(50)
+  ageGroup     String?  @map("age_group") @db.VarChar(50)
+  hireDate     DateTime? @map("hire_date") @db.Date
+  
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy    String?  @map("created_by") @db.Uuid
+  updatedBy    String?  @map("updated_by") @db.Uuid
+  isDeleted    Boolean  @default(false) @map("is_deleted")
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+
+  user         User?      @relation("EmployeeUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  team         Team?      @relation(fields: [teamId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location     Location   @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User?    @relation("EmpCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User?    @relation("EmpUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  participations  EmployeeParticipation[]
+  trainingRecords TrainingRecord[]
+  incidents       Incident[]
+  pointsLedgers   PointsLedger[]
+
+  @@unique([locationId, employeeCode], name: "uq_employee_code_org")
+  @@map("employees")
+}
+
+// ==========================================
+// 3. ENVIRONMENTAL MODULE
+// ==========================================
+
+model EmissionSource {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  locationId     String   @map("location_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  scope          String   @db.VarChar(50)
+  sourceType     String   @map("source_type") @db.VarChar(100)
+  fuelType       String?  @map("fuel_type") @db.VarChar(100)
+  unitOfMeasure  String   @map("unit_of_measure") @db.VarChar(50)
+  emissionFactor Decimal  @map("emission_factor") @db.Decimal(12, 6)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  location       Location @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("SrcCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("SrcUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  carbonEmissions CarbonEmission[]
+
+  @@map("emission_sources")
+}
+
+model CarbonEmission {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  locationId       String   @map("location_id") @db.Uuid
+  emissionSourceId String   @map("emission_source_id") @db.Uuid
+  startDate        DateTime @map("start_date") @db.Date
+  endDate          DateTime @map("end_date") @db.Date
+  rawValue         Decimal  @map("raw_value") @db.Decimal(15, 4)
+  co2EmissionsMt   Decimal  @map("co2_emissions_mt") @db.Decimal(15, 6)
+  ch4EmissionsMt   Decimal  @map("ch4_emissions_mt") @db.Decimal(15, 6)
+  n2oEmissionsMt   Decimal  @map("n2o_emissions_mt") @db.Decimal(15, 6)
+  totalCo2eMt      Decimal  @map("total_co2e_mt") @db.Decimal(15, 6)
+  calculationMethod String? @map("calculation_method")
+  
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  isDeleted        Boolean  @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location         Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  emissionSource   EmissionSource @relation(fields: [emissionSourceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser    User?    @relation("CarCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser    User?    @relation("CarUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("carbon_emissions")
+}
+
+model EnergyConsumption {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  locationId       String   @map("location_id") @db.Uuid
+  utilityName      String?  @map("utility_name") @db.VarChar(150)
+  energyType       String   @map("energy_type") @db.VarChar(100)
+  consumptionValue Decimal  @map("consumption_value") @db.Decimal(15, 4)
+  unit             String   @db.VarChar(50)
+  cost             Decimal? @db.Decimal(12, 2)
+  currency         String?  @db.VarChar(10)
+  startDate        DateTime @map("start_date") @db.Date
+  endDate          DateTime @map("end_date") @db.Date
+  
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  isDeleted        Boolean  @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location         Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser    User?    @relation("EneCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser    User?    @relation("EneUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("energy_consumption")
+}
+
+model WaterConsumption {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  locationId         String   @map("location_id") @db.Uuid
+  sourceType         String   @map("source_type") @db.VarChar(100)
+  withdrawalVolumeM3 Decimal  @map("withdrawal_volume_m3") @db.Decimal(15, 4)
+  dischargeVolumeM3  Decimal  @map("discharge_volume_m3") @db.Decimal(15, 4)
+  recycledVolumeM3   Decimal  @default(0) @map("recycled_volume_m3") @db.Decimal(15, 4)
+  cost               Decimal? @db.Decimal(12, 2)
+  startDate          DateTime @map("start_date") @db.Date
+  endDate            DateTime @map("end_date") @db.Date
+  
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy          String?  @map("created_by") @db.Uuid
+  updatedBy          String?  @map("updated_by") @db.Uuid
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location           Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser      User?    @relation("WatCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser      User?    @relation("WatUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("water_consumption")
+}
+
+model WasteManagement {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String   @map("location_id") @db.Uuid
+  wasteType      String   @map("waste_type") @db.VarChar(100)
+  disposalMethod String   @map("disposal_method") @db.VarChar(100)
+  weightMt       Decimal  @map("weight_mt") @db.Decimal(12, 4)
+  cost           Decimal? @db.Decimal(12, 2)
+  recordDate     DateTime @map("record_date") @db.Date
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location       Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("WstCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("WstUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("waste_management")
+}
+
+model RenewableEnergy {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  locationId       String   @map("location_id") @db.Uuid
+  generationType   String   @map("generation_type") @db.VarChar(100)
+  generationKwh    Decimal  @map("generation_kwh") @db.Decimal(15, 4)
+  selfConsumedKwh  Decimal  @map("self_consumed_kwh") @db.Decimal(15, 4)
+  exportedKwh      Decimal  @map("exported_kwh") @db.Decimal(15, 4)
+  recsIssued       Boolean  @default(false) @map("recs_issued")
+  startDate        DateTime @map("start_date") @db.Date
+  endDate          DateTime @map("end_date") @db.Date
+  
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  isDeleted        Boolean  @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location         Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser    User?    @relation("RenCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser    User?    @relation("RenUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("renewable_energy")
+}
+
+model EnvironmentalGoal {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  metricType     String   @map("metric_type") @db.VarChar(100)
+  targetValue    Decimal  @map("target_value") @db.Decimal(15, 4)
+  baselineValue  Decimal  @map("baseline_value") @db.Decimal(15, 4)
+  baselineYear   Int      @map("baseline_year")
+  targetYear     Int      @map("target_year")
+  currentValue   Decimal  @default(0) @map("current_value") @db.Decimal(15, 4)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("EnvCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("EnvUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("environmental_goals")
+}
+
+// ==========================================
+// 4. SOCIAL MODULE
+// ==========================================
+
+model CsrActivity {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  description    String?
+  budget         Decimal? @db.Decimal(12, 2)
+  startDate      DateTime @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  status         String   @default("Planned") @db.VarChar(50)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("CsrCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("CsrUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  participations EmployeeParticipation[]
+
+  @@map("csr_activities")
+}
+
+model EmployeeParticipation {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId    String   @map("employee_id") @db.Uuid
+  csrActivityId String   @map("csr_activity_id") @db.Uuid
+  hoursLogged   Decimal  @default(0) @map("hours_logged") @db.Decimal(6, 2)
+  feedback      String?
+  
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy     String?  @map("created_by") @db.Uuid
+  updatedBy     String?  @map("updated_by") @db.Uuid
+  isDeleted     Boolean  @default(false) @map("is_deleted")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz
+
+  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  csrActivity   CsrActivity @relation(fields: [csrActivityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User?       @relation("PartCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User?       @relation("PartUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([employeeId, csrActivityId], name: "uq_employee_csr")
+  @@map("employee_participation")
+}
+
+model VolunteerProgram {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  name                String   @db.VarChar(255)
+  partnerNgo          String?  @map("partner_ngo") @db.VarChar(255)
+  totalHoursGoal      Decimal? @map("total_hours_goal") @db.Decimal(10, 2)
+  currentHours        Decimal  @default(0) @map("current_hours") @db.Decimal(10, 2)
+  corporateMatchAmount Decimal @default(0.00) @map("corporate_match_amount") @db.Decimal(12, 2)
+  
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy           String?  @map("created_by") @db.Uuid
+  updatedBy           String?  @map("updated_by") @db.Uuid
+  isDeleted           Boolean  @default(false) @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser       User?    @relation("VolCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser       User?    @relation("VolUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("volunteer_programs")
+}
+
+model TrainingRecord {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  employeeId     String   @map("employee_id") @db.Uuid
+  courseName     String   @map("course_name") @db.VarChar(255)
+  completionDate DateTime @map("completion_date") @db.Date
+  expiryDate     DateTime? @map("expiry_date") @db.Date
+  score          Decimal? @db.Decimal(5, 2)
+  certificateUrl String?  @map("certificate_url") @db.VarChar(255)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  employee       Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("TraCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("TraUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("training_records")
+}
+
+model HealthSafetyMetric {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  locationId       String   @map("location_id") @db.Uuid
+  reportingPeriod  DateTime @map("reporting_period") @db.Date
+  workingHours     Decimal  @map("working_hours") @db.Decimal(12, 2)
+  injuriesRecorded Int      @default(0) @map("injuries_recorded")
+  lostTimeDays     Int      @default(0) @map("lost_time_days")
+  ltifr            Decimal  @default(0.0000) @db.Decimal(8, 4)
+  
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy        String?  @map("created_by") @db.Uuid
+  updatedBy        String?  @map("updated_by") @db.Uuid
+  isDeleted        Boolean  @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location         Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser    User?    @relation("HseCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser    User?    @relation("HseUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("health_safety_metrics")
+}
+
+model DiversityMetric {
+  id                       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId           String   @map("organization_id") @db.Uuid
+  reportingDate            DateTime @map("reporting_date") @db.Date
+  metricCategory           String   @map("metric_category") @db.VarChar(100)
+  genderFemalePct          Decimal  @map("gender_female_pct") @db.Decimal(5, 2)
+  genderMalePct            Decimal  @map("gender_male_pct") @db.Decimal(5, 2)
+  genderOtherPct           Decimal  @default(0) @map("gender_other_pct") @db.Decimal(5, 2)
+  underrepresentedGroupPct Decimal  @default(0) @map("underrepresented_group_pct") @db.Decimal(5, 2)
+  
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy                String?  @map("created_by") @db.Uuid
+  updatedBy                String?  @map("updated_by") @db.Uuid
+  isDeleted                Boolean  @default(false) @map("is_deleted")
+  deletedAt                DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization             Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser            User?    @relation("DivCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser            User?    @relation("DivUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("diversity_metrics")
+}
+
+// ==========================================
+// 5. GOVERNANCE MODULE
+// ==========================================
+
+model Audit {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  locationId     String?  @map("location_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  auditorName    String   @map("auditor_name") @db.VarChar(150)
+  auditorType    String   @map("auditor_type") @db.VarChar(50)
+  auditDate      DateTime @map("audit_date") @db.Date
+  score          Decimal? @db.Decimal(5, 2)
+  findings       String?
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location       Location?    @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("AudCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("AudUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("audits")
+}
+
+model ComplianceIssue {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  description    String?
+  severity       String   @db.VarChar(50)
+  status         String   @default("Open") @db.VarChar(50)
+  fineAmount     Decimal? @map("fine_amount") @db.Decimal(12, 2)
+  dueDate        DateTime? @map("due_date") @db.Date
+  resolvedDate   DateTime? @map("resolved_date") @db.Date
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("ComCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("ComUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("compliance_issues")
+}
+
+model Policy {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  version        String   @db.VarChar(20)
+  contentUrl     String?  @map("content_url") @db.VarChar(255)
+  approvalStatus String   @default("Draft") @map("approval_status") @db.VarChar(50)
+  effectiveDate  DateTime? @map("effective_date") @db.Date
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("PolCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("PolUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("policies")
+}
+
+model RiskRegister {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  category           String   @db.VarChar(100)
+  description        String
+  likelihood         Int
+  impact             Int
+  inherentRiskScore  Int      @map("inherent_risk_score") // Handled as @default or generated in DB
+  mitigationStrategy String?  @map("mitigation_strategy")
+  residualLikelihood Int
+  residualImpact     Int
+  residualRiskScore  Int      @map("residual_risk_score") // Handled as generated in DB
+  
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy          String?  @map("created_by") @db.Uuid
+  updatedBy          String?  @map("updated_by") @db.Uuid
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser      User?    @relation("RskCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser      User?    @relation("RskUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("risk_registers")
+}
+
+model BoardMember {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  name               String   @db.VarChar(150)
+  role               String   @db.VarChar(100)
+  isIndependent      Boolean  @default(false) @map("is_independent")
+  esgCommitteeMember Boolean  @default(false) @map("esg_committee_member")
+  joiningDate        DateTime? @map("joining_date") @db.Date
+  
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy          String?  @map("created_by") @db.Uuid
+  updatedBy          String?  @map("updated_by") @db.Uuid
+  isDeleted          Boolean  @default(false) @map("is_deleted")
+  deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser      User?    @relation("BrdCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser      User?    @relation("BrdUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("board_members")
+}
+
+model Incident {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String   @map("organization_id") @db.Uuid
+  locationId          String   @map("location_id") @db.Uuid
+  loggedByEmployeeId  String?  @map("logged_by_employee_id") @db.Uuid
+  title               String   @db.VarChar(255)
+  description         String?
+  incidentType        String   @map("incident_type") @db.VarChar(100)
+  severity            String   @db.VarChar(50)
+  incidentDate        DateTime @map("incident_date") @db.Timestamptz
+  status              String   @default("Investigating") @db.VarChar(50)
+  correctiveActions   String?  @map("corrective_actions")
+  
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy           String?  @map("created_by") @db.Uuid
+  updatedBy           String?  @map("updated_by") @db.Uuid
+  isDeleted           Boolean  @default(false) @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  location            Location     @relation(fields: [locationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  employee            Employee?    @relation(fields: [loggedByEmployeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser       User?    @relation("IncCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser       User?    @relation("IncUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("incidents")
+}
+
+// ==========================================
+// 6. GAMIFICATION MODULE
+// ==========================================
+
+model Challenge {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  description    String?
+  startDate      DateTime @map("start_date") @db.Date
+  endDate        DateTime @map("end_date") @db.Date
+  pointsReward   Int      @default(0) @map("points_reward")
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("ChaCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("ChaUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("challenges")
+}
+
+model Reward {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  description    String?
+  pointsCost     Int      @default(0) @map("points_cost")
+  stockAvailable Int      @default(-1) @map("stock_available")
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("RewCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("RewUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("rewards")
+}
+
+model Badge {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(150)
+  description    String?
+  iconUrl        String?  @map("icon_url") @db.VarChar(255)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("BadCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("BadUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("badges")
+}
+
+model PointsLedger {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  employeeId  String   @map("employee_id") @db.Uuid
+  points      Int
+  actionType  String   @map("action_type") @db.VarChar(100)
+  referenceId String?  @map("reference_id") @db.Uuid
+  
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  isDeleted   Boolean  @default(false) @map("is_deleted")
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser User?  @relation("PtsCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser User?  @relation("PtsUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("points_ledgers")
+}
+
+model Leaderboard {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  entityType     String   @map("entity_type") @db.VarChar(50)
+  entityId       String   @map("entity_id") @db.Uuid
+  totalPoints    Int      @default(0) @map("total_points")
+  rankPosition   Int?     @map("rank_position")
+  lastUpdated    DateTime @default(now()) @map("last_updated") @db.Timestamptz
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("LdbCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("LdbUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("leaderboards")
+}
+
+// ==========================================
+// 7. REPORTS MODULE
+// ==========================================
+
+model ReportTemplate {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  framework      String   @db.VarChar(100)
+  config         Json
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("RptCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("RptUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  generatedReports GeneratedReport[]
+
+  @@map("report_templates")
+}
+
+model GeneratedReport {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  templateId           String   @map("template_id") @db.Uuid
+  title                String   @db.VarChar(255)
+  reportingPeriodStart DateTime @map("reporting_period_start") @db.Date
+  reportingPeriodEnd   DateTime @map("reporting_period_end") @db.Date
+  fileUrl              String   @map("file_url") @db.VarChar(255)
+  checksum             String   @db.VarChar(64)
+  status               String   @default("Generated") @db.VarChar(50)
+  digitalSignature     String?  @map("digital_signature")
+  
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy            String?  @map("created_by") @db.Uuid
+  updatedBy            String?  @map("updated_by") @db.Uuid
+  isDeleted            Boolean  @default(false) @map("is_deleted")
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  template             ReportTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser        User?    @relation("GenCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser        User?    @relation("GenUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("generated_reports")
+}
+
+model KpiMetric {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(150)
+  value          Decimal  @db.Decimal(18, 6)
+  unit           String   @db.VarChar(50)
+  periodStart    DateTime @map("period_start") @db.Date
+  periodEnd      DateTime @map("period_end") @db.Date
+  dimensions     Json?
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("KpiCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("KpiUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("kpi_metrics")
+}
+
+// ==========================================
+// 8. SYSTEM MODULE
+// ==========================================
+
+model Notification {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  title          String   @db.VarChar(255)
+  message        String
+  isRead         Boolean  @default(false) @map("is_read")
+  readAt         DateTime? @map("read_at") @db.Timestamptz
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  user           User     @relation("NotReceived", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("NotCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("NotUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  actionType     String   @map("action_type") @db.VarChar(100)
+  ipAddress      String?  @map("ip_address") @db.VarChar(45)
+  userAgent      String?  @map("user_agent") @db.VarChar(255)
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  user           User     @relation("ActUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("ActCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("ActUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("activity_logs")
+}
+
+model AuditLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  tableName      String   @map("table_name") @db.VarChar(100)
+  recordId       String   @map("record_id") @db.Uuid
+  action         String   @db.VarChar(10)
+  oldState       Json?    @map("old_state")
+  newState       Json?    @map("new_state")
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  user           User     @relation("AudLogUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("AudLogCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("AudLogUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("audit_logs")
+}
+
+model Setting {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  key            String   @db.VarChar(100)
+  value          Json
+  
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy      String?  @map("created_by") @db.Uuid
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdByUser  User?    @relation("SetCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedByUser  User?    @relation("SetUpdatedBy", fields: [updatedBy], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([organizationId, key], name: "uq_org_setting_key")
+  @@map("settings")
+}
