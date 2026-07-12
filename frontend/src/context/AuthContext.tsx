@@ -14,25 +14,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<SafeUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const mockUser: SafeUser = {
+    id: 1,
+    email: 'admin@ecosphere.com',
+    name: 'Admin User',
+    role: 'admin',
+    departmentId: 1
+  };
+
+  const [user, setUser] = useState<SafeUser | null>(mockUser);
+  const [token, setToken] = useState<string | null>('dummy_token');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('esg_token');
-    const storedUser = localStorage.getItem('esg_user');
-
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      // Optionally re-fetch profile to ensure it's fresh
-      authService.getProfile()
-        .then(res => setUser(res.data.data))
-        .catch(() => logout())
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    // Skipped actual auth fetching to bypass login
   }, []);
 
   const login = (newToken: string, newUser: SafeUser) => {

@@ -23,7 +23,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('esg_token');
       localStorage.removeItem('esg_user');
-      window.location.href = '/login';
+      // window.location.href = '/login'; // bypassed
     }
     return Promise.reject(error);
   }
