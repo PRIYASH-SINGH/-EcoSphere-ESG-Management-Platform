@@ -1,0 +1,15 @@
+export const routes = [
+  "Dashboard",
+  "Environmental",
+  "Social",
+  "Governance",
+  "Reports",
+  "Goals",
+  "Challenges",
+  "Leaderboard",
+  "Departments",
+  "Categories",
+  "Users",
+  "Settings",
+  "Login",
+] as const;
