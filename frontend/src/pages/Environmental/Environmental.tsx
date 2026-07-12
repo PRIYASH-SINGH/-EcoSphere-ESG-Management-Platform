@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { environmentalService, EnvironmentalGoal, CarbonTransaction } from '../../services/environmentalService';
+import { environmentalService } from '../../services/environmentalService';
+import type { EnvironmentalGoal, CarbonTransaction } from '../../services/environmentalService';
 import toast from 'react-hot-toast';
 
 export function Environmental() {

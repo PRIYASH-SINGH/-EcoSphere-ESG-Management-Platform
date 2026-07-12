@@ -1,5 +1,5 @@
 import { Bell, MessageSquare, Search } from "lucide-react";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { navigation } from "../services/dashboardData";
 

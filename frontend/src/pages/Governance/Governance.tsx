@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { governanceService, Audit, ComplianceIssue } from '../../services/governanceService';
+import { governanceService } from '../../services/governanceService';
+import type { Audit, ComplianceIssue } from '../../services/governanceService';
 import toast from 'react-hot-toast';
 
 export function Governance() {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { socialService, CsrActivity } from '../../services/socialService';
+import { socialService } from '../../services/socialService';
+import type { CsrActivity } from '../../services/socialService';
 import toast from 'react-hot-toast';
 
 export function Social() {

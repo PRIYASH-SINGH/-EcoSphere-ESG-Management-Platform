@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { useAuth } from './context/AuthContext';
 import { AppLayout } from './layouts/AppLayout';
 import { Login } from './pages/Login/Login';
@@ -10,7 +11,7 @@ import { Governance } from './pages/Governance/Governance';
 import { Reports } from './pages/Reports/Reports';
 
 // Protect routes
-function ProtectedRoute({ children }: { children: JSX.Element }) {
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
   
   if (isLoading) return <div>Loading...</div>;
