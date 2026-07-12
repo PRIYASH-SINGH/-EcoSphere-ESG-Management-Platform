@@ -1,14 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
+model User {
+  email                   String                   @unique @db.VarChar(255)
+  isActive                Boolean                  @default(true) @map("is_active")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @default(now()) @updatedAt @map("updated_at")
+  departmentId            Int?                     @map("department_id")
+  name                    String                   @db.VarChar(255)
+  password                String                   @db.VarChar(255)
+  role                    UserRole                 @default(employee)
+  totalXp                 Int                      @default(0) @map("total_xp")
+  id                      Int                      @id @default(autoincrement())
+  carbonTransactions      CarbonTransaction[]
+  challengeParticipations ChallengeParticipation[]
+  employeeParticipations  EmployeeParticipation[]
+  policyAcknowledgements  PolicyAcknowledgement[]
+  rewardRedemptions       RewardRedemption[]
+  userBadges              UserBadge[]
+  department              Department?              @relation(fields: [departmentId], references: [id])
+
+  @@map("users")
 }
 
-// ─── Enums ───────────────────────────────────────────────────────────────────
+model Department {
+  name               String              @db.VarChar(255)
+  code               String              @unique @db.VarChar(50)
+  createdAt          DateTime            @default(now()) @map("created_at")
+  head               String?             @db.VarChar(255)
+  parentDeptId       Int?                @map("parent_dept_id")
+  id                 Int                 @id @default(autoincrement())
+  audits             Audit[]
+  carbonTransactions CarbonTransaction[]
+  departmentScores   DepartmentScore[]
+  parentDept         Department?         @relation("DeptHierarchy", fields: [parentDeptId], references: [id])
+  childDepts         Department[]        @relation("DeptHierarchy")
+  environmentalGoals EnvironmentalGoal[]
+  users              User[]
+
+  @@map("departments")
+}
+
+model Category {
+  id              Int              @id @default(autoincrement())
+  name            String           @db.VarChar(255)
+  type            CategoryType
+  description     String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  challenges      Challenge[]
+  csrActivities   CsrActivity[]
+  emissionFactors EmissionFactor[]
+
+  @@map("categories")
+}
+
+model EmissionFactor {
+  id                 Int                 @id @default(autoincrement())
+  name               String              @db.VarChar(255)
+  factor             Float
+  unit               String              @db.VarChar(100)
+  categoryId         Int?                @map("category_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  carbonTransactions CarbonTransaction[]
+  category           Category?           @relation(fields: [categoryId], references: [id])
+
+  @@map("emission_factors")
+}
+
+model CarbonTransaction {
+  id               Int            @id @default(autoincrement())
+  source           String         @db.VarChar(255)
+  emissionFactorId Int            @map("emission_factor_id")
+  value            Float
+  carbonEmitted    Float          @map("carbon_emitted")
+  departmentId     Int            @map("department_id")
+  date             DateTime
+  createdBy        Int            @map("created_by")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  creator          User           @relation(fields: [createdBy], references: [id])
+  department       Department     @relation(fields: [departmentId], references: [id])
+  emissionFactor   EmissionFactor @relation(fields: [emissionFactorId], references: [id])
+
+  @@map("carbon_transactions")
+}
+
+model EnvironmentalGoal {
+  targetValue  Float      @map("target_value")
+  currentValue Float      @default(0) @map("current_value")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  deadline     DateTime
+  departmentId Int        @map("department_id")
+  status       GoalStatus @default(active)
+  title        String     @db.VarChar(255)
+  id           Int        @id @default(autoincrement())
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@map("environmental_goals")
+}
+
+model CsrActivity {
+  title          String                  @db.VarChar(255)
+  description    String
+  startDate      DateTime                @map("start_date")
+  endDate        DateTime                @map("end_date")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  categoryId     Int?                    @map("category_id")
+  id             Int                     @id @default(autoincrement())
+  status         ActivityStatus          @default(upcoming)
+  category       Category?               @relation(fields: [categoryId], references: [id])
+  participations EmployeeParticipation[]
+
+  @@map("csr_activities")
+}
+
+model EmployeeParticipation {
+  id            Int                    @id @default(autoincrement())
+  userId        Int                    @map("user_id")
+  csrActivityId Int                    @map("csr_activity_id")
+  proof         String?
+  status        CsrParticipationStatus @default(pending)
+  pointsEarned  Int                    @default(0) @map("points_earned")
+  approvedBy    Int?                   @map("approved_by")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  csrActivity   CsrActivity            @relation(fields: [csrActivityId], references: [id])
+  user          User                   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, csrActivityId])
+  @@map("employee_participations")
+}
+
+model DiversityMetric {
+  createdAt    DateTime @default(now()) @map("created_at")
+  date         DateTime
+  departmentId Int?     @map("department_id")
+  metric       String   @db.VarChar(255)
+  value        Float
+  id           Int      @id @default(autoincrement())
+
+  @@map("diversity_metrics")
+}
+
+model PolicyAcknowledgement {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  policyName     String   @map("policy_name") @db.VarChar(255)
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, policyName])
+  @@map("policy_acknowledgements")
+}
+
+model Audit {
+  title            String            @db.VarChar(255)
+  auditDate        DateTime          @map("audit_date")
+  findings         String?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  auditor          String            @db.VarChar(255)
+  departmentId     Int               @map("department_id")
+  status           AuditStatus       @default(scheduled)
+  id               Int               @id @default(autoincrement())
+  department       Department        @relation(fields: [departmentId], references: [id])
+  complianceIssues ComplianceIssue[]
+
+  @@map("audits")
+}
+
+model ComplianceIssue {
+  description String
+  dueDate     DateTime         @map("due_date")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  auditId     Int?             @map("audit_id")
+  owner       String           @db.VarChar(255)
+  id          Int              @id @default(autoincrement())
+  severity    Severity
+  status      ComplianceStatus @default(open)
+  audit       Audit?           @relation(fields: [auditId], references: [id])
+
+  @@map("compliance_issues")
+}
+
+model Challenge {
+  title          String                   @db.VarChar(255)
+  description    String
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  categoryId     Int?                     @map("category_id")
+  deadline       DateTime?
+  difficulty     Difficulty
+  status         ChallengeStatus          @default(active)
+  xpReward       Int                      @map("xp_reward")
+  id             Int                      @id @default(autoincrement())
+  participations ChallengeParticipation[]
+  category       Category?                @relation(fields: [categoryId], references: [id])
+
+  @@map("challenges")
+}
+
+model ChallengeParticipation {
+  id          Int                 @id @default(autoincrement())
+  userId      Int                 @map("user_id")
+  challengeId Int                 @map("challenge_id")
+  proof       String?
+  status      ParticipationStatus @default(started)
+  xpAwarded   Int                 @default(0) @map("xp_awarded")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  challenge   Challenge           @relation(fields: [challengeId], references: [id])
+  user        User                @relation(fields: [userId], references: [id])
+
+  @@unique([userId, challengeId])
+  @@map("challenge_participations")
+}
+
+model Badge {
+  name        String      @db.VarChar(255)
+  description String
+  createdAt   DateTime    @default(now()) @map("created_at")
+  icon        String?
+  unlockRule  String      @map("unlock_rule")
+  id          Int         @id @default(autoincrement())
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id       Int      @id @default(autoincrement())
+  userId   Int      @map("user_id")
+  badgeId  Int      @map("badge_id")
+  earnedAt DateTime @default(now()) @map("earned_at")
+  badge    Badge    @relation(fields: [badgeId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model Reward {
+  description    String
+  createdAt      DateTime           @default(now()) @map("created_at")
+  name           String             @db.VarChar(255)
+  pointsRequired Int                @map("points_required")
+  stock          Int
+  id             Int                @id @default(autoincrement())
+  redemptions    RewardRedemption[]
+
+  @@map("rewards")
+}
+
+model RewardRedemption {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  rewardId   Int      @map("reward_id")
+  redeemedAt DateTime @default(now()) @map("redeemed_at")
+  reward     Reward   @relation(fields: [rewardId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@map("reward_redemptions")
+}
+
+model DepartmentScore {
+  id            Int        @id @default(autoincrement())
+  departmentId  Int        @map("department_id")
+  date          DateTime
+  environmental Float
+  social        Float
+  governance    Float
+  total         Float
+  department    Department @relation(fields: [departmentId], references: [id])
+
+  @@map("department_scores")
+}
 
 enum UserRole {
   admin
@@ -102,294 +370,4 @@ enum ComplianceStatus {
   closed
 
   @@map("compliance_status")
-}
-
-// ─── Models ──────────────────────────────────────────────────────────────────
-
-model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique @db.VarChar(255)
-  password     String    @db.VarChar(255)
-  name         String    @db.VarChar(255)
-  role         UserRole  @default(employee)
-  departmentId Int?      @map("department_id")
-  totalXp      Int       @default(0) @map("total_xp")
-  isActive     Boolean   @default(true) @map("is_active")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
-
-  department             Department?             @relation(fields: [departmentId], references: [id])
-  challengeParticipations ChallengeParticipation[]
-  userBadges             UserBadge[]
-  rewardRedemptions      RewardRedemption[]
-  employeeParticipations EmployeeParticipation[]
-  policyAcknowledgements PolicyAcknowledgement[]
-  carbonTransactions     CarbonTransaction[]
-
-  @@map("users")
-}
-
-model Department {
-  id           Int         @id @default(autoincrement())
-  name         String      @db.VarChar(255)
-  code         String      @unique @db.VarChar(50)
-  head         String?     @db.VarChar(255)
-  parentDeptId Int?        @map("parent_dept_id")
-  createdAt    DateTime    @default(now()) @map("created_at")
-
-  parentDept   Department?  @relation("DeptHierarchy", fields: [parentDeptId], references: [id])
-  childDepts   Department[] @relation("DeptHierarchy")
-  users        User[]
-  environmentalGoals EnvironmentalGoal[]
-  carbonTransactions CarbonTransaction[]
-  departmentScores   DepartmentScore[]
-  audits             Audit[]
-
-  @@map("departments")
-}
-
-model Category {
-  id          Int          @id @default(autoincrement())
-  name        String       @db.VarChar(255)
-  type        CategoryType
-  description String?
-  createdAt   DateTime     @default(now()) @map("created_at")
-
-  emissionFactors EmissionFactor[]
-  challenges      Challenge[]
-  csrActivities   CsrActivity[]
-
-  @@map("categories")
-}
-
-model EmissionFactor {
-  id         Int      @id @default(autoincrement())
-  name       String   @db.VarChar(255)
-  factor     Float
-  unit       String   @db.VarChar(100)
-  categoryId Int?     @map("category_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  category           Category?          @relation(fields: [categoryId], references: [id])
-  carbonTransactions CarbonTransaction[]
-
-  @@map("emission_factors")
-}
-
-model CarbonTransaction {
-  id               Int      @id @default(autoincrement())
-  source           String   @db.VarChar(255)
-  emissionFactorId Int      @map("emission_factor_id")
-  value            Float
-  carbonEmitted    Float    @map("carbon_emitted")
-  departmentId     Int      @map("department_id")
-  date             DateTime
-  createdBy        Int      @map("created_by")
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  emissionFactor EmissionFactor @relation(fields: [emissionFactorId], references: [id])
-  department     Department     @relation(fields: [departmentId], references: [id])
-  creator        User           @relation(fields: [createdBy], references: [id])
-
-  @@map("carbon_transactions")
-}
-
-model EnvironmentalGoal {
-  id           Int        @id @default(autoincrement())
-  title        String     @db.VarChar(255)
-  targetValue  Float      @map("target_value")
-  currentValue Float      @default(0) @map("current_value")
-  departmentId Int        @map("department_id")
-  deadline     DateTime
-  status       GoalStatus @default(active)
-  createdAt    DateTime   @default(now()) @map("created_at")
-
-  department Department @relation(fields: [departmentId], references: [id])
-
-  @@map("environmental_goals")
-}
-
-model CsrActivity {
-  id          Int            @id @default(autoincrement())
-  title       String         @db.VarChar(255)
-  description String
-  categoryId  Int?           @map("category_id")
-  startDate   DateTime       @map("start_date")
-  endDate     DateTime       @map("end_date")
-  status      ActivityStatus @default(upcoming)
-  createdAt   DateTime       @default(now()) @map("created_at")
-
-  category       Category?               @relation(fields: [categoryId], references: [id])
-  participations EmployeeParticipation[]
-
-  @@map("csr_activities")
-}
-
-model EmployeeParticipation {
-  id            Int                    @id @default(autoincrement())
-  userId        Int                    @map("user_id")
-  csrActivityId Int                    @map("csr_activity_id")
-  proof         String?
-  status        CsrParticipationStatus @default(pending)
-  pointsEarned  Int                    @default(0) @map("points_earned")
-  approvedBy    Int?                   @map("approved_by")
-  createdAt     DateTime               @default(now()) @map("created_at")
-
-  user        User        @relation(fields: [userId], references: [id])
-  csrActivity CsrActivity @relation(fields: [csrActivityId], references: [id])
-
-  @@unique([userId, csrActivityId])
-  @@map("employee_participations")
-}
-
-model DiversityMetric {
-  id           Int      @id @default(autoincrement())
-  metric       String   @db.VarChar(255)
-  value        Float
-  departmentId Int?     @map("department_id")
-  date         DateTime
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@map("diversity_metrics")
-}
-
-model PolicyAcknowledgement {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @map("user_id")
-  policyName     String   @map("policy_name") @db.VarChar(255)
-  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
-
-  user User @relation(fields: [userId], references: [id])
-
-  @@unique([userId, policyName])
-  @@map("policy_acknowledgements")
-}
-
-model Audit {
-  id           Int         @id @default(autoincrement())
-  title        String      @db.VarChar(255)
-  departmentId Int         @map("department_id")
-  auditor      String      @db.VarChar(255)
-  auditDate    DateTime    @map("audit_date")
-  findings     String?
-  status       AuditStatus @default(scheduled)
-  createdAt    DateTime    @default(now()) @map("created_at")
-
-  department       Department        @relation(fields: [departmentId], references: [id])
-  complianceIssues ComplianceIssue[]
-
-  @@map("audits")
-}
-
-model ComplianceIssue {
-  id          Int              @id @default(autoincrement())
-  auditId     Int?             @map("audit_id")
-  severity    Severity
-  description String
-  owner       String           @db.VarChar(255)
-  dueDate     DateTime         @map("due_date")
-  status      ComplianceStatus @default(open)
-  createdAt   DateTime         @default(now()) @map("created_at")
-
-  audit Audit? @relation(fields: [auditId], references: [id])
-
-  @@map("compliance_issues")
-}
-
-model Challenge {
-  id          Int             @id @default(autoincrement())
-  title       String          @db.VarChar(255)
-  categoryId  Int?            @map("category_id")
-  description String
-  xpReward    Int             @map("xp_reward")
-  difficulty  Difficulty
-  deadline    DateTime?
-  status      ChallengeStatus @default(active)
-  createdAt   DateTime        @default(now()) @map("created_at")
-
-  category       Category?                @relation(fields: [categoryId], references: [id])
-  participations ChallengeParticipation[]
-
-  @@map("challenges")
-}
-
-model ChallengeParticipation {
-  id          Int                 @id @default(autoincrement())
-  userId      Int                 @map("user_id")
-  challengeId Int                 @map("challenge_id")
-  proof       String?
-  status      ParticipationStatus @default(started)
-  xpAwarded   Int                 @default(0) @map("xp_awarded")
-  createdAt   DateTime            @default(now()) @map("created_at")
-
-  user      User      @relation(fields: [userId], references: [id])
-  challenge Challenge @relation(fields: [challengeId], references: [id])
-
-  @@unique([userId, challengeId])
-  @@map("challenge_participations")
-}
-
-model Badge {
-  id          Int      @id @default(autoincrement())
-  name        String   @db.VarChar(255)
-  description String
-  unlockRule  String   @map("unlock_rule")
-  icon        String?
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  userBadges UserBadge[]
-
-  @@map("badges")
-}
-
-model UserBadge {
-  id       Int      @id @default(autoincrement())
-  userId   Int      @map("user_id")
-  badgeId  Int      @map("badge_id")
-  earnedAt DateTime @default(now()) @map("earned_at")
-
-  user  User  @relation(fields: [userId], references: [id])
-  badge Badge @relation(fields: [badgeId], references: [id])
-
-  @@unique([userId, badgeId])
-  @@map("user_badges")
-}
-
-model Reward {
-  id             Int      @id @default(autoincrement())
-  name           String   @db.VarChar(255)
-  description    String
-  pointsRequired Int      @map("points_required")
-  stock          Int
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  redemptions RewardRedemption[]
-
-  @@map("rewards")
-}
-
-model RewardRedemption {
-  id         Int      @id @default(autoincrement())
-  userId     Int      @map("user_id")
-  rewardId   Int      @map("reward_id")
-  redeemedAt DateTime @default(now()) @map("redeemed_at")
-
-  user   User   @relation(fields: [userId], references: [id])
-  reward Reward @relation(fields: [rewardId], references: [id])
-
-  @@map("reward_redemptions")
-}
-
-model DepartmentScore {
-  id            Int      @id @default(autoincrement())
-  departmentId  Int      @map("department_id")
-  date          DateTime
-  environmental Float
-  social        Float
-  governance    Float
-  total         Float
-
-  department Department @relation(fields: [departmentId], references: [id])
-
-  @@map("department_scores")
 }
